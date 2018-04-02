@@ -1,0 +1,124 @@
+---
+title: "Prediction assignment Writeup"
+author: "Fernando Cabrales"
+date: "4/1/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har>
+
+## Needed libraries
+```{r}
+library(data.table)
+library(caret)
+library(RCurl)
+library(ggplot2)
+library(randomForest)
+library(doParallel)
+
+cores <- 2
+cl <- makePSOCKcluster(cores)
+registerDoParallel(cl)
+```
+
+
+## Data
+Importing training and test data locally using urls:
+```{r}
+
+pmltrainingcsv <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+trainingData <- read.csv(textConnection(pmltrainingcsv), header=T)
+dim(trainingData)
+
+pmltestingcsv <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+testing <- read.csv(textConnection(pmltestingcsv), header=T)
+dim(testing)
+
+```
+Training data set contains 19622 observation and 160 variables
+Testing data set contains 20 observations and 160 variables
+
+## Cleaning variables with no data
+```{r}
+trainingData <- trainingData [,colSums(is.na(trainingData)) == 0]
+testing <- testing [,colSums(is.na(testing)) == 0]
+
+dim(trainingData)
+dim(testing)
+
+
+```
+
+
+## Creating validation set from training set
+Creating validation set without classe variable and predicting use pitch_arm variable
+
+```{r}
+set.seed(5885)
+inBuild <- createDataPartition(y=trainingData$classe, p = 0.7, list = FALSE)
+validation <- trainingData [-inBuild,]
+training <- trainingData [inBuild,]
+
+dim(validation)
+dim(training)
+dim(testing)
+```
+
+
+
+
+## Build modals to predict classe
+Building models for classification tree and random forest, using 5 times cross validation for both.
+```{r}
+mod1 <- train(classe ~., method = "rpart", data = training, trControl = trainControl(method = "CV", number = 5))
+#mod2 <- train(classe ~., method = "rf",ntree = 100, data = training, trControl = trainControl(method = "CV", number = 5),importance=TRUE, proximity+TRUE,do.trace=TRUE)
+
+print(mod1)
+#print(mod2)
+
+```
+
+
+##Plot predictions
+```{r}
+plot(mod1$finalModel)
+#plot(mod2$finalModel)
+```
+
+##Predict outcomes using validation set
+```{r}
+pred1 <- predict(mod1, validation)
+#pred2 <- predict(mod2, validation)
+
+```
+
+## Prediction result for classification trees and random forest
+```{r}
+(confusion_of_rpart <- confusionMatrix(validation$classe, pred1))
+(accuracy_of_rpart <- confusion_of_rpart$overall[1])
+
+
+#(confusion_of_random_forest <- confusionMatrix(validation$classe, pred2))
+#(accuracy_of_random_forest <- confusion_of_random_forest$overall[1])
+```
+The best prediction I got was with classification trees, since random forest was taking a long time to train.
+
+
+##Predictions on test data set
+pred1 <- predict(mod1, testing)
+(confusion_of_rpart <- confusionMatrix(testing$classe, pred1))
+(accuracy_of_rpart <- confusion_of_rpart$overall[1])
+
+
+
+
+##Data used in this document was from below citation
+ Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6.
+Cited by 2 (Google Scholar) 
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
